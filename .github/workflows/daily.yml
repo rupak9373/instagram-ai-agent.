@@ -19,7 +19,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: Research and generate Reel preview
+      - name: Research broad content topics
+        run: python agent/research_topics.py
+      - name: Generate visual Reel preview
         run: python agent/main.py
       - name: Save preview video and plan
         uses: actions/upload-artifact@v4
@@ -28,4 +30,5 @@ jobs:
           path: |
             output/reel.mp4
             output/plan.json
+            output/topic_research.json
           retention-days: 3
