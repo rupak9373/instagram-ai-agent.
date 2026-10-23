@@ -24,43 +24,59 @@ def research():
         return [], str(exc)[:160]
 
 def select_theme(items):
-    words=" ".join(i["title"].lower() for i in items)
-    keywords={"kinetic_rings":["kinetic","sculpture","ring","motion"],
-              "color_orbits":["color","rainbow","palette","design"],
-              "optical_waves":["optical","illusion","wave","geometry"]}
-    scores={key:sum(words.count(word) for word in kws) for key,kws in keywords.items()}
-    day=datetime.now(timezone.utc).timetuple().tm_yday
-    themes=list(keywords)
-    theme=max(themes,key=lambda k:(scores[k], (day+themes.index(k))%3))
-    return theme,scores
+    # Deterministic daily variety without relying on external headlines.
+    themes = ["bounce_maze", "bounce_bucket", "bounce_bottle", "bounce_car"]
+    day = datetime.now(timezone.utc).timetuple().tm_yday
+    return themes[day % len(themes)], {"daily_rotation": day % len(themes)}
 
-def make_frame(theme,t):
-    w,h=720,1280
-    image=Image.new("RGB",(w,h),(12,13,32))
-    d=ImageDraw.Draw(image,"RGBA")
-    for y in range(0,h,12):
-        pulse=int(12*math.sin(y/130+t))
-        d.rectangle((0,y,w,y+12),fill=(20+pulse//3,19+pulse//3,45+pulse//2,255))
-    cx,cy=w//2,h//2
-    for i in range(18):
-        a=t*1.3+i*2*math.pi/18
-        r=145+35*math.sin(t*.7+i*.5)
-        if theme=="color_orbits":r=100+i*12
-        x=cx+math.cos(a)*r;y=cy+math.sin(a)*r
-        s=22+int(12*(1+math.sin(t+i)))
-        d.ellipse((x-s,y-s,x+s,y+s),fill=((i*31+int(t*40))%256,(100+i*17)%256,(250-i*9)%256,235))
-    for j in range(8):
-        r=75+j*37
-        if theme=="kinetic_rings":
-            d.arc((cx-r,cy-r,cx+r,cy+r),int(t*75+j*35),int(t*75+j*35+160),fill=(80+j*16,210-j*12,240,175),width=7)
-        elif theme=="optical_waves":
-            pts=[(x,int(cy+(j-4)*64+18*math.sin(x/37+t*3+j*.6))) for x in range(0,w+1,10)]
-            d.line(pts,fill=(125+j*12,155+j*8,230,170),width=5)
-    try:font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",32)
-    except OSError:font=ImageFont.load_default()
-    d.text((w//2,140),theme.replace("_"," ").upper(),font=font,anchor="mm",fill=(245,245,255,255))
-    d.text((w//2,h-150),"Watch the patterns flow",font=font,anchor="mm",fill=(235,238,255,255))
-    return image
+def make_frame(theme, t):
+    w, h = 720, 1280
+    im = Image.new("RGB", (w, h), (12, 16, 35))
+    d = ImageDraw.Draw(im, "RGBA")
+    colors = [(255, 100, 145), (80, 225, 255), (255, 213, 85),
+              (170, 125, 255), (110, 245, 155), (255, 145, 90)]
+    # Animated ball physics: gravity and perfectly elastic floor bounces.
+    floor = 1010
+    d.rounded_rectangle((55, 290, 665, floor + 28), radius=35,
+                        outline=(110, 155, 235, 220), width=9)
+    if theme == "bounce_maze":
+        for j in range(4):
+            y = 450 + j * 115
+            d.rounded_rectangle((90 if j % 2 else 290, y, 450 if j % 2 else 630, y + 13),
+                                radius=6, fill=(120, 170, 230, 190))
+    elif theme == "bounce_bucket":
+        d.line([(180, 680), (225, 1010), (495, 1010), (540, 680)],
+               fill=(130, 225, 250, 210), width=13, joint="curve")
+    elif theme == "bounce_bottle":
+        d.line([(245, 420), (245, 530), (170, 610), (190, 1005),
+                (530, 1005), (550, 610), (475, 530), (475, 420)],
+               fill=(130, 225, 250, 210), width=13, joint="curve")
+    else:
+        d.rounded_rectangle((150, 755, 565, 950), radius=50,
+                            outline=(130, 225, 250, 210), width=12)
+        for x in (245, 490):
+            d.ellipse((x-42, 925, x+42, 1009), fill=(65, 85, 130, 255),
+                      outline=(180, 230, 255, 255), width=7)
+    for i in range(12):
+        radius = 20 + i % 3 * 5
+        phase = (t * (1.35 + i * .08) + i * .39) % 2.0
+        # Triangle-wave vertical travel with easing near the apex.
+        bounce = 1 - (phase - 1) ** 2
+        x = 115 + ((i * 73 + int(t * (38 + i * 5))) % 490)
+        y = floor - radius - bounce * (310 + (i % 4) * 65)
+        r, g, b = colors[i % len(colors)]
+        d.ellipse((x-radius, y-radius, x+radius, y+radius), fill=(r,g,b,255))
+        d.ellipse((x-radius*.55, y-radius*.65, x-radius*.12, y-radius*.2),
+                  fill=(255,255,255,170))
+        d.ellipse((x-radius*1.2, floor+7, x+radius*1.2, floor+16),
+                  fill=(0,0,0,65))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 37)
+    except OSError:
+        font = ImageFont.load_default()
+    d.text((w//2, 155), "BOUNCING BALLS", font=font, anchor="mm", fill=(245,245,255,255))
+    d.text((w//2, 1125), "SO SATISFYING!", font=font, anchor="mm", fill=(245,245,255,255))
+    return im
 
 def main():
     items,error=research()
@@ -69,8 +85,8 @@ def main():
           "research_method":"Google News RSS headlines, not Instagram trend analytics",
           "headlines":items[:8],"research_error":error,"scores":scores,
           "video_type":"Original algorithmic animation (not generative AI)",
-          "instagram_status":"NOT CONNECTED; PREVIEW ONLY",
-          "caption":"What pattern did you like most? ✨ #satisfying #visualart #reels"}
+          "instagram_status":"Publishing handled separately by GitHub Actions",
+          "caption":"Which bouncing ball is your favorite? 🌈 #bouncingball #satisfying #reels"}
     (OUT/"plan.json").write_text(json.dumps(plan,ensure_ascii=False,indent=2),encoding="utf-8")
     with tempfile.TemporaryDirectory() as tmp:
         tmp=Path(tmp)
